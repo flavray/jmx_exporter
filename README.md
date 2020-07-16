@@ -45,6 +45,7 @@ lowercaseOutputLabelNames: false
 whitelistObjectNames: ["org.apache.cassandra.metrics:*"]
 blacklistObjectNames: ["org.apache.cassandra.metrics:type=ColumnFamily,*"]
 cacheRules: false
+cacheMBeanAttributeInfo: false
 rules:
   - pattern: 'org.apache.cassandra.metrics<type=(\w+), name=(\w+)><>Value: (\d+)'
     name: cassandra_$1_$2
@@ -68,6 +69,7 @@ lowercaseOutputLabelNames | Lowercase the output metric label names. Applies to 
 whitelistObjectNames | A list of [ObjectNames](http://docs.oracle.com/javase/6/docs/api/javax/management/ObjectName.html) to query. Defaults to all mBeans.
 blacklistObjectNames | A list of [ObjectNames](http://docs.oracle.com/javase/6/docs/api/javax/management/ObjectName.html) to not query. Takes precedence over `whitelistObjectNames`. Defaults to none.
 cacheRules | Whether to bean to rule rule computation. If true, bean values are ommitted when matching.
+cacheMBeanAttributeInfo | Whether to cache calls to MBeanInfo.getAttributes. Most applications produce beans that are immutable, where caching can be used. Some applications mutate bean attributes, caching may be turned off.
 rules      | A list of rules to apply in order, processing stops at the first matching rule. Attributes that aren't matched aren't collected. If not specified, defaults to collecting everything in the default format.
 pattern  | Regex pattern to match against each bean attribute. The pattern is not anchored. Capture groups can be used in other options. Defaults to matching everything.
 attrNameSnakeCase | Converts the attribute name to snake case. This is seen in the names matched by the pattern and the default format. For example, anAttrName to an\_attr\_name. Defaults to false.

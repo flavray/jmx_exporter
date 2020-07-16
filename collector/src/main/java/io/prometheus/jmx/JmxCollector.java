@@ -63,6 +63,7 @@ public class JmxCollector extends Collector implements Collector.Describable {
       List<ObjectName> whitelistObjectNames = new ArrayList<ObjectName>();
       List<ObjectName> blacklistObjectNames = new ArrayList<ObjectName>();
       boolean cacheRules = false;
+      boolean cacheMBeanAttributeInfo = false;
       List<Rule> rules = new ArrayList<Rule>();
       long lastUpdate = 0L;
     }
@@ -171,6 +172,10 @@ public class JmxCollector extends Collector implements Collector.Describable {
 
         if (yamlConfig.containsKey("cacheRules")) {
           cfg.cacheRules = (Boolean)yamlConfig.get("cacheRules");
+        }
+
+        if (yamlConfig.containsKey("cacheMBeanAttributeInfo")) {
+          cfg.cacheMBeanAttributeInfo = (Boolean)yamlConfig.get("cacheMBeanAttributeInfo");
         }
 
       if (yamlConfig.containsKey("rules")) {
@@ -504,6 +509,7 @@ public class JmxCollector extends Collector implements Collector.Describable {
           LOGGER.fine("Configuration file changed, reloading...");
           reloadConfig();
           cachedRules.clear();  // rules may have changed with the configuration, clear the rule cache
+          jmxMBeanPropertyCache.setCacheAttributeInfo(config.cacheMBeanAttributeInfo);
         }
       }
 

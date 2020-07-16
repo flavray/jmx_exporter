@@ -1,12 +1,14 @@
 package io.prometheus.jmx;
 
-import javax.management.ObjectName;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import javax.management.MBeanAttributeInfo;
+import javax.management.MBeanServerConnection;
+import javax.management.ObjectName;
 
 /**
  * This object stores a mapping of mBean objectNames to mBean key property lists. The main purpose of it is to reduce
@@ -32,8 +34,24 @@ class JmxMBeanPropertyCache {
     // in the order they were added).
     private final Map<ObjectName, LinkedHashMap<String, String>> keyPropertiesPerBean;
 
+    // Cache mbean attribute info to avoid repetitive calls to the mbean server
+    private final Map<ObjectName, MBeanAttributeInfo[]> attributeInfoPerBean;
+
+    // Whether to use the attributeInfoPerBean cache.
+    // Bean information is usually immutable ([1]) and can be cached. However, applications are able to change
+    // this information during the lifetime of the process, in which case caching is not recommended.
+    //
+    // [1] https://docs.oracle.com/javase/8/docs/api/javax/management/MBeanInfo.html
+    private boolean cacheAttributeInfo = false;
+
     public JmxMBeanPropertyCache() {
+        this(false);
+    }
+
+    public JmxMBeanPropertyCache(boolean cacheAttributeInfo) {
         this.keyPropertiesPerBean = new ConcurrentHashMap<ObjectName, LinkedHashMap<String, String>>();
+        this.attributeInfoPerBean = new ConcurrentHashMap<ObjectName, MBeanAttributeInfo[]>();
+        this.cacheAttributeInfo = cacheAttributeInfo;
     }
 
     Map<ObjectName, LinkedHashMap<String, String>> getKeyPropertiesPerBean() {
@@ -59,13 +77,39 @@ class JmxMBeanPropertyCache {
         return keyProperties;
     }
 
+    public MBeanAttributeInfo[] getAttributes(ObjectName mbeanName, MBeanServerConnection beanConn) throws Exception {
+        if (!cacheAttributeInfo) {
+            return beanConn.getMBeanInfo(mbeanName).getAttributes();
+        }
+
+        MBeanAttributeInfo[] info = attributeInfoPerBean.get(mbeanName);
+        if (info == null) {
+            info = beanConn.getMBeanInfo(mbeanName).getAttributes();
+            attributeInfoPerBean.put(mbeanName, info);
+        }
+        return info;
+    }
+
     public void onlyKeepMBeans(Set<ObjectName> latestBeans) {
         for (ObjectName prevName : keyPropertiesPerBean.keySet()) {
             if (!latestBeans.contains(prevName)) {
                 keyPropertiesPerBean.remove(prevName);
             }
         }
+
+        for (ObjectName prevName : attributeInfoPerBean.keySet()) {
+            if (!latestBeans.contains(prevName)) {
+                attributeInfoPerBean.remove(prevName);
+            }
+        }
     }
 
+    public void setCacheAttributeInfo(boolean cacheAttributeInfo) {
+        // If the cache is being disabled, clear it to avoid stale entries in case it is enabled again
+        if (this.cacheAttributeInfo && !cacheAttributeInfo) {
+            attributeInfoPerBean.clear();
+        }
 
+        this.cacheAttributeInfo = cacheAttributeInfo;
+    }
 }

@@ -1,10 +1,17 @@
 package io.prometheus.jmx;
 
-import javax.management.Attribute;
-import javax.management.AttributeList;
-import javax.management.JMException;
+import java.lang.management.ManagementFactory;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.management.MBeanAttributeInfo;
-import javax.management.MBeanInfo;
 import javax.management.MBeanServerConnection;
 import javax.management.ObjectInstance;
 import javax.management.ObjectName;
@@ -18,18 +25,6 @@ import javax.management.remote.JMXServiceURL;
 import javax.management.remote.rmi.RMIConnectorServer;
 import javax.naming.Context;
 import javax.rmi.ssl.SslRMIClientSocketFactory;
-import java.io.IOException;
-import java.lang.management.ManagementFactory;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.TreeSet;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 
 class JmxScraper {
@@ -125,40 +120,29 @@ class JmxScraper {
     }
 
     private void scrapeBean(MBeanServerConnection beanConn, ObjectName mbeanName) {
-        MBeanInfo info;
-        try {
-          info = beanConn.getMBeanInfo(mbeanName);
-        } catch (IOException e) {
-          logScrape(mbeanName.toString(), "getMBeanInfo Fail: " + e);
-          return;
-        } catch (JMException e) {
-          logScrape(mbeanName.toString(), "getMBeanInfo Fail: " + e);
-          return;
-        }
-        MBeanAttributeInfo[] attrInfos = info.getAttributes();
+        MBeanAttributeInfo[] info;
 
-        Map<String, MBeanAttributeInfo> name2AttrInfo = new LinkedHashMap<String, MBeanAttributeInfo>();
-        for (int idx = 0; idx < attrInfos.length; ++idx) {
-            MBeanAttributeInfo attr = attrInfos[idx];
+        try {
+            info = jmxMBeanPropertyCache.getAttributes(mbeanName, beanConn);
+        } catch (Exception e) {
+            logScrape(mbeanName.toString(), "getAttributes Fail: " + e);
+            return;
+        }
+
+        for (MBeanAttributeInfo attr : info) {
             if (!attr.isReadable()) {
                 logScrape(mbeanName, attr, "not readable");
                 continue;
             }
-            name2AttrInfo.put(attr.getName(), attr);
-        }
-        final AttributeList attributes;
-        try {
-            attributes = beanConn.getAttributes(mbeanName, name2AttrInfo.keySet().toArray(new String[0]));
-            if (attributes == null) {
-                logScrape(mbeanName.toString(), "getAttributes Fail: attributes are null");
-                return;
+
+            Object value;
+            try {
+                value = beanConn.getAttribute(mbeanName, attr.getName());
+            } catch (Exception e) {
+                logScrape(mbeanName.toString(), "getAttribute Fail: " + e);
+                continue;
             }
-        } catch (Exception e) {
-            logScrape(mbeanName, name2AttrInfo.keySet(), "Fail: " + e);
-            return;
-        }
-        for (Attribute attribute : attributes.asList()) {
-            MBeanAttributeInfo attr = name2AttrInfo.get(attribute.getName());
+
             logScrape(mbeanName, attr, "process");
             processBeanValue(
                     mbeanName.getDomain(),
@@ -167,7 +151,7 @@ class JmxScraper {
                     attr.getName(),
                     attr.getType(),
                     attr.getDescription(),
-                    attribute.getValue()
+                    value
             );
         }
     }
